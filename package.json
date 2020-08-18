@@ -1,7 +1,7 @@
 {
   "name": "ngx-ble-mesh",
   "version": "0.0.1",
-  "description": "A nice greeter",
+  "description": "A library written in typescript to support access to fruity-mesh by an ionic app",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
@@ -33,7 +33,10 @@
   "homepage": "https://github.com/NilsMinor/ngx-ble-mesh#readme",
   "devDependencies": {
     "@types/jest": "^26.0.10",
+    "crypto-js": "^4.0.0",
+    "install": "^0.13.0",
     "jest": "^26.4.0",
+    "npm": "^6.14.8",
     "prettier": "^2.0.5",
     "ts-jest": "^26.2.0",
     "tslint": "^6.1.3",
