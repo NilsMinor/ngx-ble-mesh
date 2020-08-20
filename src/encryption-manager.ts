@@ -1,9 +1,7 @@
 import { MeshHandshakeAnounce } from '../meassages/mesh-handshake-anounce';
-import { MESSAGE_ID_SENDER, MIC_LENGTH, NETWORK_KEY } from '../mesh';
-import { copyUint8Array, getDataAsString, incrementUint, Packet, xorData } from '../packet';
+import { MESSAGE_ID_SENDER, MIC_LENGTH, NETWORK_KEY } from './mesh-constants';
+import { copyUint8Array, getDataAsString, incrementUint, Packet, xorData } from './packet';
 import * as CryptoJS from 'crypto-js';
-import CryptoES from 'crypto-es';
-import WordArray = CryptoES.x64.WordArray;
 
 export class EncryptionManager {
   private encryptionNounce: number[] = [];
@@ -100,64 +98,45 @@ export class EncryptionManager {
   }
 
   public encryptMessage(data: Uint8Array): Uint8Array {
-    // generate keyStream1
+    // Generate keyStream1 with nonce
+    const clearText = new Uint8Array(data.buffer.slice(0));
+    const ciphertext = new Uint8Array(data.buffer.slice(0));
     const encryptionNounce = new Packet(16);
     encryptionNounce.set32Bit(0, this.encryptionNounce[0]);
     encryptionNounce.set32Bit(4, this.encryptionNounce[1]);
 
+    console.log('using nonce ', this.encryptionNounce[1]);
     const keyStream1 = this.encrypt(this.sessionEncryptionKey, encryptionNounce.getData());
+    console.log('keystream1', getDataAsString('hex', keyStream1));
+    xorData(keyStream1, ciphertext);
 
     this.encryptionNounce[1] = incrementUint(this.encryptionNounce[1]);
 
     encryptionNounce.set32Bit(0, this.encryptionNounce[0]);
     encryptionNounce.set32Bit(4, this.encryptionNounce[1]);
 
+    console.log('using nonce ', this.encryptionNounce[1]);
     const keyStream2 = this.encrypt(this.sessionEncryptionKey, encryptionNounce.getData());
 
     this.encryptionNounce[1] = incrementUint(this.encryptionNounce[1]);
 
-    console.log('keystream1', getDataAsString('hex', keyStream1));
     console.log('keystream2', getDataAsString('hex', keyStream2));
 
     // xor data with keystream
 
-    xorData(keyStream1, data);
-
-    const dataCopy = new Uint8Array(data.buffer.slice(0));
-
-    xorData(keyStream2, dataCopy);
+    xorData(keyStream2, clearText);
 
     const mic = new Uint8Array(4);
-    mic.set(this.encrypt(this.sessionEncryptionKey, dataCopy).slice(0, 4));
+    mic.set(this.encrypt(this.sessionEncryptionKey, clearText).slice(0, 4));
 
-    console.log('mic : ', getDataAsString('hex', mic));
+    console.log('calculated mic : ', getDataAsString('hex', mic));
 
-    const encryptedData = new Uint8Array(data.length + mic.length);
-    encryptedData.set(data);
-    encryptedData.set(mic, data.length);
+    const encryptedData = new Uint8Array(ciphertext.length + mic.length);
+    encryptedData.set(ciphertext);
+    encryptedData.set(mic, ciphertext.length);
 
     return encryptedData;
   }
-
-  /**
-   * Encrypt a data packet using ECB/NoPadding using networkKey
-   * @param key - encryption key
-   * @param clear - data to be encrypted
-   */
-  public encrypt(key: Uint8Array, clear: Uint8Array): Uint8Array {
-    const encKey = this.encodeUint8Array(key);
-    const encClear = this.encodeUint8Array(clear);
-
-    const encrypted = CryptoJS.AES.encrypt(encClear, encKey, {
-      keySize: 128 / 4,
-      iv: CryptoJS.enc.Latin1.parse('00000000000000000000000000000000'),
-      mode: CryptoJS.mode.ECB,
-      padding: CryptoJS.pad.NoPadding,
-    });
-
-    return this.wordArrayToUint8Array(encrypted.ciphertext);
-  }
-
   /**
    * Convert a WordArray to Uint8Array.
    * @param data - WordArray eq. encrypted.ciphertext
@@ -205,11 +184,15 @@ export class EncryptionManager {
     const decKey = this.encodeUint8Array(key);
     const encEncrypted = this.encodeUint8Array(encrypted);
 
-    const decrypted = CryptoJS.AES.decrypt(CryptoJS.enc.Latin1.stringify(encEncrypted), CryptoJS.enc.Latin1.stringify(decKey), {
-      iv: CryptoJS.enc.Latin1.parse('00000000000000000000000000000000'),
-      mode: CryptoJS.mode.ECB,
-      padding: CryptoJS.pad.NoPadding,
-    });
+    const decrypted = CryptoJS.AES.decrypt(
+      CryptoJS.enc.Latin1.stringify(encEncrypted),
+      CryptoJS.enc.Latin1.stringify(decKey),
+      {
+        iv: CryptoJS.enc.Latin1.parse('00000000000000000000000000000000'),
+        mode: CryptoJS.mode.ECB,
+        padding: CryptoJS.pad.NoPadding,
+      },
+    );
 
     return this.wordArrayToUint8Array(decrypted);
     const decryptedArray32 = Uint32Array.from(decrypted.words);
